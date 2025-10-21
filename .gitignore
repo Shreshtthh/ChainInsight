@@ -12,7 +12,6 @@ pnpm-lock.yaml
 # Build outputs
 dist/
 build/
-*.js
 *.js.map
 *.d.ts
 # Allow config files to be committed
