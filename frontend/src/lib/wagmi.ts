@@ -1,9 +1,16 @@
-import { getDefaultConfig } from '@rainbow-me/rainbowkit';
+import { http, createConfig } from 'wagmi';
 import { baseSepolia } from 'wagmi/chains';
+import { injected, metaMask } from 'wagmi/connectors';
 
-export const wagmiConfig = getDefaultConfig({
-  appName: 'ChainInsight',
-  projectId: 'YOUR_WALLETCONNECT_PROJECT_ID', // Get from https://cloud.walletconnect.com
+export const wagmiConfig = createConfig({
   chains: [baseSepolia],
-  ssr: false,
+  connectors: [
+    injected({ 
+      target: 'metaMask',
+    }),
+    metaMask(),
+  ],
+  transports: {
+    [baseSepolia.id]: http(),
+  },
 });
