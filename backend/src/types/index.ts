@@ -33,3 +33,29 @@ export interface ExecutionResult {
   status: 'pending' | 'success' | 'failed';
   blockNumber?: number;
 }
+
+export interface TransactionParams {
+  to: string;
+  data: string;
+  value: string;
+  description: string;
+}
+
+export interface StrategyAction {
+  action: 'deposit' | 'withdraw' | 'approve';
+  amount?: string;
+  protocol?: string;
+  strategy?: string;
+  positionId?: number;
+}
+
+export interface AgentResponse {
+  response: string;
+  requiresApproval: boolean;
+  transactions?: TransactionParams[];
+  metadata?: {
+    strategyAction?: StrategyAction;
+    estimatedGas?: string;
+    risk?: string;
+  };
+}
