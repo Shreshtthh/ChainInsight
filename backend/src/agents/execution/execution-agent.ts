@@ -3,7 +3,7 @@ import { transactionExecutorTool } from '../../tools/web3/transaction-executor';
 
 export const executionAgent = new LlmAgent({
   name: 'execution_agent',
-  model: 'gemini-2.0-flash-exp',
+  model: 'gemini-2.5-flash',
   description: 'Executes approved transactions on-chain',
   instruction: `You are a transaction execution specialist handling on-chain operations.
 

@@ -3,7 +3,7 @@ import { simulateDepositTool } from '../../tools/web3/transaction-simulator';
 
 export const simulationAgent = new LlmAgent({
   name: 'simulation_agent',
-  model: 'gemini-2.0-flash-exp',
+  model: 'gemini-2.5-flash',
   description: 'Simulates DeFi transactions to verify safety and estimate costs before execution',
   instruction: `You are a transaction simulation specialist ensuring safe execution.
 

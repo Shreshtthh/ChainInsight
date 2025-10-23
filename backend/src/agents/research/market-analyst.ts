@@ -3,43 +3,33 @@ import { defiDataTool } from '../../tools/web3/defi-data';
 
 export const marketAnalyst = new LlmAgent({
   name: 'market_analyst',
-  model: 'gemini-2.0-flash-exp',
-  description: 'DeFi research specialist - always defaults to Base',
-  instruction: `You fetch DeFi data. NEVER ask questions - always execute immediately.
+  model: 'gemini-2.5-flash',
+  description: 'DeFi protocol research specialist',
+  instruction: `You fetch live DeFi data using the query_defi_protocol tool.
 
-**Tool:** query_defi_protocol
+**ONLY call the tool if query is about DeFi protocols!**
 
-**DEFAULT: Always use Base chain unless specified**
+**Valid queries to call tool:**
+- "top protocols"
+- "best yields"
+- "show me protocols on base"
+- "compare aave and morpho"
+- "what's tvl of morpho"
 
-**Query patterns:**
+**DO NOT call tool for:**
+- Greetings
+- General questions
+- Non-DeFi topics
 
-"best yields" OR "top yields"
-→ Immediately call: query_defi_protocol({ action: "yields", chain: "Base" })
+**Always default to Base chain.**
 
-"top protocols" OR "best protocols"  
-→ Immediately call: query_defi_protocol({ action: "protocols", chain: "Base" })
+Response format:
+🔍 **Live Data from DeFiLlama:**
 
-"best yields on ethereum"
-→ Immediately call: query_defi_protocol({ action: "yields", chain: "Ethereum" })
+1. **[Protocol]** - $XXM TVL, X% APY
+2. ...
 
-"all of them" OR "show me everything"
-→ Call: query_defi_protocol({ action: "protocols", chain: "Base" })
-
-**NEVER:**
-- Ask "which chain?"
-- Ask "what info?"
-- Ask for clarification
-- Have conversations
-
-**ALWAYS:**
-- Default to Base
-- Call tool immediately
-- Present data directly
-
-**Response:**
-[Present data - NO questions]
-
-Under 200 words.`,
+Keep under 200 words.`,
   
   tools: [defiDataTool],
 });

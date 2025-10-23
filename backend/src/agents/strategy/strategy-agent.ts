@@ -3,7 +3,7 @@ import { transactionBuilderTool } from '../../tools/web3/transaction-builder-too
 
 export const strategyAgent = new LlmAgent({
   name: 'strategy_agent',
-  model: 'gemini-2.0-flash-exp',
+  model: 'gemini-2.5-flash',
   description: 'Builds transactions immediately',
   instruction: `You build DeFi transactions. NEVER ask questions.
 

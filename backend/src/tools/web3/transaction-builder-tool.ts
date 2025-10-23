@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { buildTransactionParams, StrategyAction, TransactionParams } from './transaction-builder';
 
 // Global storage for last built transactions (temporary workaround)
-let lastBuiltTransactions: TransactionParams[] | null = null;
+let lastBuiltTransactions: TransactionParams[] | undefined = undefined;
 
 export const transactionBuilderTool = createTool({
   name: 'build_transaction',
@@ -48,11 +48,15 @@ export const transactionBuilderTool = createTool({
         message: `Built ${transactions.length} transaction(s) for ${params.action}`,
       };
       
-      return JSON.stringify(result);
+      return JSON.stringify({
+    success: true,
+    transactions,
+    message: `Built ${transactions.length} transaction(s)`,
+  }, null, 2);
 
     } catch (error: any) {
       console.error('❌ Transaction builder tool error:', error);
-      lastBuiltTransactions = null;
+      lastBuiltTransactions = undefined;
       return JSON.stringify({
         success: false,
         error: error.message,
@@ -63,8 +67,8 @@ export const transactionBuilderTool = createTool({
 });
 
 // Export function to retrieve last built transactions
-export function getLastBuiltTransactions(): TransactionParams[] | null {
+export function getLastBuiltTransactions(): TransactionParams[] | undefined {
   const txs = lastBuiltTransactions;
-  lastBuiltTransactions = null; // Clear after retrieval
+  lastBuiltTransactions = undefined; // Change null to undefined
   return txs;
 }

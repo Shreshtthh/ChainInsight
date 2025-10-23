@@ -4,7 +4,7 @@ import { marketAnalyst } from './market-analyst';
 
 export const researchCoordinator = new LlmAgent({
   name: 'research_coordinator',
-  model: 'gemini-2.0-flash-exp',
+  model: 'gemini-2.5-flash',
   description: 'Coordinates parallel research across specialized agents',
   instruction: `You are the research coordinator managing a team of specialized Web3 analysts.
 

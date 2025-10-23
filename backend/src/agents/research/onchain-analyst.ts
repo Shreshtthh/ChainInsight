@@ -3,7 +3,7 @@ import { blockchainQueryTool } from '../../tools/web3/blockchain-query';
 
 export const onChainAnalyst = new LlmAgent({
   name: 'onchain_analyst',
-  model: 'gemini-2.0-flash-exp',
+  model: 'gemini-2.5-flash',
   description: 'Specializes in analyzing on-chain blockchain data',
   instruction: `You are an on-chain data analyst specializing in blockchain analysis.
 
