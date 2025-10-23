@@ -1,47 +1,46 @@
 import 'dotenv/config';
+
+// PRODUCTION CHECK - Don't run tests in production
+if (process.env.NODE_ENV === 'production') {
+  console.log('🚫 main.ts skipped in production mode');
+  console.log('✅ Use server.ts for production API');
+  process.exit(0);
+}
+
+// Only import and run if in development
 import { AgentBuilder } from '@iqai/adk';
 import { coordinatorAgent } from './agents/coordinator/coordinator-agent';
 
 async function main() {
-  console.log('🚀 ChainInsight - Web3 Research & Execution Agent');
-  console.log('================================================\n');
+  console.log('🚀 ChainInsight - Development Test Mode');
+  console.log('==========================================\n');
 
   if (!process.env.GOOGLE_API_KEY) {
-    throw new Error('GOOGLE_API_KEY not set in .env file');
+    throw new Error('GOOGLE_API_KEY not set');
   }
 
-  console.log('✅ ChainInsight initialized\n');
+  console.log('✅ Running development tests...\n');
 
   const { runner } = await AgentBuilder
     .create('chaininsight')
     .withAgent(coordinatorAgent)
     .build();
 
-  // Test queries showcasing full pipeline
   const queries = [
-    // Query 1: Research only
-    "What are the top 3 DeFi lending protocols on Base blockchain by TVL? Use your tools to get real data.",
-    
-    // Query 2: Full pipeline (research → strategy → simulate)
-    "Find me a safe yield opportunity on Base with at least 5% APY. Generate a strategy and simulate depositing 100 USDC."
+    "What are the top 3 DeFi lending protocols on Base?",
   ];
 
   for (const query of queries) {
-    console.log('\n' + '═'.repeat(100));
-    console.log(`📝 QUERY: ${query}`);
-    console.log('═'.repeat(100) + '\n');
-    
+    console.log(`\n📝 QUERY: ${query}\n`);
     try {
       const response = await runner.ask(query);
-      console.log('🤖 RESPONSE:\n');
-      console.log(response);
-      console.log('\n');
+      console.log('🤖 RESPONSE:\n', response, '\n');
     } catch (error) {
       console.error('❌ Error:', error);
     }
   }
 
-  console.log('✅ All queries completed!\n');
+  console.log('✅ Tests completed!\n');
 }
 
 main().catch(console.error);
