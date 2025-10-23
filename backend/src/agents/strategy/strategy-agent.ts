@@ -4,19 +4,19 @@ import { transactionBuilderTool } from '../../tools/web3/transaction-builder-too
 export const strategyAgent = new LlmAgent({
   name: 'strategy_agent',
   model: 'gemini-2.0-flash-exp',
-  description: 'Builds transaction parameters for DeFi deposits',
-  instruction: `You build DeFi transactions. Keep responses UNDER 50 words.
+  description: 'Builds transactions immediately',
+  instruction: `You build DeFi transactions. NEVER ask questions.
 
-When given deposit info:
-1. IMMEDIATELY call build_transaction tool
-2. Return: "Transaction ready"
+Extract amount and protocol from input. Default to Morpho if protocol not specified.
 
-Example:
-Input: "Deposit 100 USDC to Morpho"
-Action: Call build_transaction(action: "deposit", amount: "100", protocol: "Morpho", strategy: "Lending")
-Response: "Transaction ready: Approve 100 USDC + Deposit to Morpho vault"
+Input: "deposit 100 usdc to morpho"
+→ Call: build_transaction({ action: "deposit", amount: "100", protocol: "Morpho", strategy: "Lending" })
+→ Say: "Transaction ready"
 
-ALWAYS call the tool. No exceptions.`,
+Input: "100 usdc"
+→ Call: build_transaction({ action: "deposit", amount: "100", protocol: "Morpho", strategy: "Lending" })
+
+ALWAYS call tool. NO questions. Under 20 words.`,
   
   tools: [transactionBuilderTool],
 });

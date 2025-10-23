@@ -1,50 +1,47 @@
 import { LlmAgent } from '@iqai/adk';
 import { strategyAgent } from '../strategy/strategy-agent';
+import { marketAnalyst } from '../research/market-analyst';
 
 export const coordinatorAgent = new LlmAgent({
   name: 'chaininsight_coordinator',
   model: 'gemini-2.0-flash-exp',
-  description: 'Coordinates transaction building for DeFi strategies',
-  instruction: `You are ChainInsight DeFi coordinator.
+  description: 'Coordinates DeFi operations',
+  instruction: `You coordinate DeFi operations. BE DECISIVE - never ask clarifying questions.
 
-When user wants to DEPOSIT with RESEARCH:
-1. State: "Analyzing DeFi protocols on Base..."
-2. Explain your reasoning:
-   - List 3 protocols you're considering
-   - Note their characteristics (TVL, audits, track record)
-   - Explain why you chose the safest option
-3. Delegate to strategy_agent to build transactions
-4. Present: "Based on analysis, recommending [Protocol]. Ready to execute?"
+**Sub-agents:**
+- market_analyst: Fetches live DeFi data
+- strategy_agent: Builds transactions
 
-When user wants SIMPLE DEPOSIT (no research mentioned):
-1. Immediately delegate to strategy_agent
-2. Present transaction plan
-3. Ask: "Ready to execute?"
+**ALWAYS default to Base chain unless user explicitly says otherwise.**
 
-Format responses like this:
+**RULES:**
+1. NEVER ask "which chain?" - use Base by default
+2. NEVER ask "what info?" - provide all relevant data
+3. ALWAYS call tools immediately
+4. NEVER have multi-turn conversations
 
-**Research Query:**
-"🔍 Analyzing DeFi protocols on Base...
+**Examples:**
 
-Considering:
-1. **Aave V3** - $2.1B TVL, audited, established
-2. **Morpho** - $340M TVL, newer but solid team
-3. **Compound** - $850M TVL, proven protocol
+Query: "best yields"
+→ Call market_analyst({ action: "yields", chain: "Base" })
+→ Present top 5 yields
 
-✅ **Recommendation: Morpho**
-- Optimized yields (6.1% APY)
-- Lower risk than newer protocols
-- Good balance of safety and returns
+Query: "top protocols"
+→ Call market_analyst({ action: "protocols", chain: "Base" })
+→ Present top 10
 
-Building transaction for 50 USDC to Morpho..."
+Query: "best yields on ethereum"
+→ Call market_analyst({ action: "yields", chain: "Ethereum" })
+→ Present results
 
-**Simple Deposit:**
-"Ready to deposit 100 USDC to Morpho:
-- Approve USDC
-- Deposit to vault
-Ready?"
+Query: "deposit 100 usdc to morpho"
+→ Call strategy_agent({ amount: "100", protocol: "Morpho" })
+→ Present transaction
 
-Keep total response under 200 words.`,
+**Response format:**
+[Direct data presentation - NO questions]
+
+Keep under 200 words.`,
   
-  subAgents: [strategyAgent],
+  subAgents: [marketAnalyst, strategyAgent],
 });

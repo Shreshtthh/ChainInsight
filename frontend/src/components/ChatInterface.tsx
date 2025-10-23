@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useConnect, useDisconnect } from 'wagmi';
 import { formatUnits } from 'viem';
-import { Send, Loader2, Wallet, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
+import { Send, Loader2, Wallet, AlertCircle, CheckCircle2, ExternalLink, Sparkles, TrendingUp, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { CONTRACTS, MOCK_USDC_ABI, MOCK_VAULT_ABI } from '../lib/contracts';
 import Portfolio from './Portfolio';
@@ -31,12 +31,12 @@ export default function ChatInterface() {
   const [currentTxIndex, setCurrentTxIndex] = useState(0);
   const [executionStatus, setExecutionStatus] = useState<'idle' | 'executing' | 'success' | 'error'>('idle');
   const [showPortfolio, setShowPortfolio] = useState(false);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
   const { disconnect } = useDisconnect();
   
-  // Read USDC balance
   const { data: balanceData, refetch: refetchBalance } = useReadContract({
     address: CONTRACTS.MOCK_USDC,
     abi: MOCK_USDC_ABI,
@@ -52,35 +52,23 @@ export default function ChatInterface() {
     hash,
   });
 
-  // Debug logging
+  // Auto-scroll to bottom
   useEffect(() => {
-    console.log('🔌 Wallet Status:', {
-      isConnected,
-      address,
-      balance: balance ? formatUnits(balance, 6) : 'N/A',
-    });
-  }, [isConnected, address, balance]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
-  // Handle transaction confirmation
   useEffect(() => {
     if (isConfirmed && hash) {
-      console.log('✅ Transaction Confirmed:', hash);
-      
       const txUrl = `https://sepolia.basescan.org/tx/${hash}`;
       const txDescription = pendingTransactions[currentTxIndex]?.description || 'Transaction';
       
       addMessage('system', `✅ ${txDescription} confirmed!\n\nView on BaseScan: ${txUrl}`);
-      
-      // Refetch balance
       refetchBalance();
       
-      // Move to next transaction or finish
       if (currentTxIndex < pendingTransactions.length - 1) {
-        console.log(`🔄 Moving to transaction ${currentTxIndex + 2}/${pendingTransactions.length}`);
         setCurrentTxIndex(currentTxIndex + 1);
         executeNextTransaction(currentTxIndex + 1);
       } else {
-        console.log('🎉 All transactions completed successfully');
         setExecutionStatus('success');
         setPendingTransactions([]);
         setCurrentTxIndex(0);
@@ -89,24 +77,18 @@ export default function ChatInterface() {
     }
   }, [isConfirmed, hash]);
 
-  // Handle transaction errors
   useEffect(() => {
     if (writeError) {
-      console.error('❌ Transaction Error:', writeError);
       setExecutionStatus('error');
-      
       const errorMessage = writeError.message.includes('User rejected')
         ? '❌ Transaction rejected by user'
         : `❌ Transaction failed: ${writeError.message}`;
-      
       addMessage('system', errorMessage);
     }
   }, [writeError]);
 
   const addMessage = (role: 'user' | 'agent' | 'system', content: string) => {
-    const msg = { role, content, timestamp: new Date() };
-    console.log(`💬 [${role.toUpperCase()}]:`, content.substring(0, 100));
-    setMessages(prev => [...prev, msg]);
+    setMessages(prev => [...prev, { role, content, timestamp: new Date() }]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -114,38 +96,23 @@ export default function ChatInterface() {
     if (!input.trim() || isLoading) return;
 
     const query = input.trim();
-    console.log('📤 Sending query:', query);
-    
     setInput('');
     addMessage('user', query);
     setIsLoading(true);
 
     try {
-      console.log('🔄 Calling API...');
       const response = await api.query(query, sessionId || undefined);
-      
-      console.log('📥 API Response:', {
-        sessionId: response.sessionId,
-        requiresApproval: response.requiresApproval,
-        hasTransactions: !!response.transactions,
-        transactionCount: response.transactions?.length || 0,
-      });
-      
       setSessionId(response.sessionId);
       addMessage('agent', response.response);
 
-      // If transactions are included, store them
       if (response.transactions && response.transactions.length > 0) {
-        console.log('💾 Storing transactions:', response.transactions);
         setPendingTransactions(response.transactions);
       }
 
       if (response.requiresApproval) {
-        console.log('⚠️ Approval required - showing modal');
         setShowApproval(true);
       }
     } catch (error: any) {
-      console.error('❌ Query failed:', error);
       addMessage('system', `❌ Error: ${error.message || 'Unknown error'}`);
     } finally {
       setIsLoading(false);
@@ -153,60 +120,40 @@ export default function ChatInterface() {
   };
 
   const handleMint = async () => {
-    if (!isConnected || !address) {
-      console.warn('⚠️ Wallet not connected');
-      addMessage('system', '⚠️ Please connect your wallet first');
-      return;
-    }
-
+    if (!isConnected || !address) return;
     try {
-      console.log('🎁 Minting 1000 mUSDC to:', address);
       addMessage('system', '⏳ Minting 1000 mUSDC...');
-      
       writeContract({
         address: CONTRACTS.MOCK_USDC,
         abi: MOCK_USDC_ABI,
         functionName: 'mint',
         args: [BigInt(1000 * 10 ** 6)],
       });
-      
-      console.log('✅ Mint transaction submitted');
-      
     } catch (error: any) {
-      console.error('❌ Mint failed:', error);
       addMessage('system', `❌ Mint failed: ${error.message}`);
     }
   };
 
   const executeNextTransaction = async (txIndex: number) => {
-    if (txIndex >= pendingTransactions.length) {
-      console.log('✅ All transactions executed');
-      return;
-    }
+    if (txIndex >= pendingTransactions.length) return;
 
     const tx = pendingTransactions[txIndex];
-    console.log(`🔄 Executing transaction ${txIndex + 1}/${pendingTransactions.length}:`, tx);
-    
     addMessage('system', `⏳ Step ${txIndex + 1}/${pendingTransactions.length}: ${tx.description}`);
 
     try {
       resetWrite();
       
-      // Determine which contract and function from description
       if (tx.description.includes('Approve')) {
         const amount = tx.description.match(/(\d+)/)?.[0] || '100';
-        
         writeContract({
           address: CONTRACTS.MOCK_USDC,
           abi: MOCK_USDC_ABI,
           functionName: 'approve',
           args: [CONTRACTS.MOCK_VAULT, BigInt(amount) * BigInt(10 ** 6)],
         });
-        
       } else if (tx.description.includes('Deposit')) {
         const amount = tx.description.match(/(\d+)/)?.[0] || '100';
         const protocol = tx.description.match(/to (\w+)/)?.[1] || 'Morpho';
-        
         writeContract({
           address: CONTRACTS.MOCK_VAULT,
           abi: MOCK_VAULT_ABI,
@@ -214,59 +161,34 @@ export default function ChatInterface() {
           args: [BigInt(amount) * BigInt(10 ** 6), protocol, 'Lending'],
         });
       }
-      
-      console.log(`✅ Transaction ${txIndex + 1} submitted, waiting for confirmation...`);
-      
     } catch (error: any) {
-      console.error(`❌ Transaction ${txIndex + 1} failed:`, error);
       setExecutionStatus('error');
       addMessage('system', `❌ Transaction failed: ${error.message}`);
     }
   };
 
   const handleApprove = async () => {
-    if (!sessionId) {
-      console.error('❌ No session ID');
-      addMessage('system', '❌ No session found');
-      return;
-    }
-
-    if (!isConnected || !address) {
-      console.error('❌ Wallet not connected');
-      addMessage('system', '❌ Please connect your wallet first');
-      return;
-    }
-    
-    console.log('✅ User approved execution for session:', sessionId);
+    if (!sessionId || !isConnected || !address) return;
     
     setShowApproval(false);
     setIsLoading(true);
     addMessage('user', '✅ Approved execution');
 
     try {
-      console.log('🔄 Calling approval API...');
       const response = await api.approve(sessionId, true);
-      
-      console.log('📥 Approval response:', response);
-
       const transactions = response.transactions || pendingTransactions;
       
       if (!transactions || transactions.length === 0) {
-        console.warn('⚠️ No transactions to execute');
-        addMessage('system', '⚠️ No transactions found. Please try your query again.');
+        addMessage('system', '⚠️ No transactions found');
         setIsLoading(false);
         return;
       }
 
-      console.log(`🎯 Starting execution of ${transactions.length} transaction(s)`);
       setPendingTransactions(transactions);
       setCurrentTxIndex(0);
       setExecutionStatus('executing');
-      
       executeNextTransaction(0);
-      
     } catch (error: any) {
-      console.error('❌ Approval failed:', error);
       addMessage('system', `❌ Approval failed: ${error.message}`);
       setExecutionStatus('error');
     } finally {
@@ -275,251 +197,235 @@ export default function ChatInterface() {
   };
 
   const handleReject = () => {
-    console.log('🚫 User rejected execution');
     setShowApproval(false);
     setPendingTransactions([]);
     addMessage('user', '❌ Rejected execution');
     addMessage('agent', 'Execution cancelled. How else can I help you?');
   };
 
+  const suggestedQueries = [
+    { icon: <TrendingUp size={16} />, text: "What are the top DeFi protocols on Base?" },
+    { icon: <Zap size={16} />, text: "Show me the best yields" },
+    { icon: <Sparkles size={16} />, text: "Deposit 100 USDC to Morpho" },
+  ];
+
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
       {/* Header */}
-      <div className="bg-white rounded-t-2xl p-6 shadow-lg">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-800">🔍 ChainInsight</h1>
-            <p className="text-gray-600 mt-1">Autonomous Web3 Research & Execution Agent</p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            {/* Portfolio Toggle Button */}
-            {isConnected && (
-              <button
-                onClick={() => setShowPortfolio(!showPortfolio)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
-              >
-                {showPortfolio ? '💬 Chat' : '📊 Portfolio'}
-              </button>
-            )}
-
-            {/* Balance Display */}
-            {isConnected && balance !== undefined ? (
-              <div className="text-right">
-                <div className="text-sm text-gray-500">mUSDC Balance</div>
-                <div className="text-lg font-semibold">
-                  {String(formatUnits(balance, 6))}
-                </div>
+      <div className="border-b border-gray-800 bg-gray-900/50 backdrop-blur-xl">
+        <div className="max-w-6xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-2 rounded-xl">
+                <Sparkles className="text-white" size={24} />
               </div>
-            ) : null}
-
-            {/* Mint Button */}
-            {isConnected && (
-              <button
-                onClick={handleMint}
-                disabled={isConfirming}
-                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition disabled:opacity-50"
-              >
-                🎁 Mint Test USDC
-              </button>
-            )}
-
-            {/* Wallet Connection */}
-            {!isConnected ? (
-              <button
-                onClick={() => {
-                  console.log('🔌 Connecting wallet...');
-                  connect({ connector: connectors[0] });
-                }}
-                className="bg-purple-600 hover:bg-purple-700 text-white px-6 py-3 rounded-lg font-semibold transition flex items-center gap-2"
-              >
-                <Wallet size={20} />
-                Connect Wallet
-              </button>
-            ) : (
-              <div className="flex items-center gap-3">
-                <div className="text-sm text-gray-600">
-                  {address?.slice(0, 6)}...{address?.slice(-4)}
-                </div>
-                <button
-                  onClick={() => {
-                    console.log('🔌 Disconnecting wallet...');
-                    disconnect();
-                  }}
-                  className="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded-lg text-sm transition"
-                >
-                  Disconnect
-                </button>
+              <div>
+                <h1 className="text-2xl font-bold text-white">ChainInsight</h1>
+                <p className="text-sm text-gray-400">AI-Powered DeFi Research Agent</p>
               </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Chat/Portfolio Section */}
-      <div className="bg-white p-6 min-h-[500px] max-h-[600px] overflow-y-auto">
-        {showPortfolio ? (
-          <Portfolio />
-        ) : (
-          <>
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-500 mt-20">
-                <p className="text-lg mb-4">👋 Welcome! Ask me anything about DeFi protocols and yields.</p>
-                <div className="space-y-2">
-                  <button 
-                    onClick={() => setInput("What are the top DeFi protocols on Base?")}
-                    className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
+            </div>
+            
+            <div className="flex items-center gap-3">
+              {isConnected && (
+                <>
+                  <button
+                    onClick={() => setShowPortfolio(!showPortfolio)}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded-lg font-medium transition-all transform hover:scale-105"
                   >
-                    What are the top DeFi protocols on Base?
+                    {showPortfolio ? '💬 Chat' : '📊 Portfolio'}
                   </button>
-                  <button 
-                    onClick={() => setInput("Deposit 100 USDC to Morpho")}
-                    className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
-                  >
-                    Deposit 100 USDC to Morpho
-                  </button>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {messages.map((msg, idx) => (
-                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                    <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                      msg.role === 'user' 
-                        ? 'bg-purple-600 text-white' 
-                        : msg.role === 'system'
-                        ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                        : 'bg-gray-100 text-gray-800'
-                    }`}>
-                      <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
-                      {msg.content.includes('basescan.org') && (
-                        <a 
-                          href={msg.content.match(/https:\/\/[^\s]+/)?.[0]} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-800 underline"
-                        >
-                          <ExternalLink size={14} />
-                          View Transaction
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-                {isLoading && (
-                  <div className="flex justify-start">
-                    <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
-                      <Loader2 className="animate-spin" size={20} />
-                      <span className="text-sm text-gray-600">Thinking...</span>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
-          </>
-        )}
-      </div>
 
-      {/* Approval Modal */}
-      {showApproval && !showPortfolio && (
-        <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-6 mb-4">
-          <div className="flex items-start gap-3">
-            <AlertCircle className="text-yellow-600 mt-1" size={24} />
-            <div className="flex-1">
-              <h3 className="text-lg font-bold text-yellow-900 mb-2">⚠️ Approval Required</h3>
-              <p className="text-yellow-800 mb-3">
-                The agent has completed research and generated a strategy with {pendingTransactions.length} transaction(s). 
-                Would you like to proceed with execution?
-              </p>
-              
-              {pendingTransactions.length > 0 && (
-                <div className="bg-white rounded-lg p-3 mb-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-2">Transaction Steps:</p>
-                  <ol className="text-sm text-gray-600 space-y-1">
-                    {pendingTransactions.map((tx, idx) => (
-                      <li key={idx} className="flex items-start gap-2">
-                        <span className="font-semibold">{idx + 1}.</span>
-                        <span>{tx.description}</span>
-                      </li>
-                    ))}
-                  </ol>
-                </div>
+                  {balance !== undefined && (
+                    <div className="bg-gray-800/50 px-4 py-2 rounded-lg border border-gray-700">
+                      <div className="text-xs text-gray-400">Balance</div>
+                      <div className="text-sm font-bold text-white">
+                        {formatUnits(balance, 6)} <span className="text-gray-400">mUSDC</span>
+                      </div>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleMint}
+                    disabled={isConfirming}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-all disabled:opacity-50"
+                  >
+                    🎁 Mint
+                  </button>
+                </>
               )}
-              
-              <div className="flex gap-3">
+
+              {!isConnected ? (
                 <button
-                  onClick={handleApprove}
-                  disabled={!isConnected || isLoading}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  onClick={() => connect({ connector: connectors[0] })}
+                  className="px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white rounded-lg font-semibold transition-all transform hover:scale-105 flex items-center gap-2"
                 >
-                  <CheckCircle2 size={20} />
-                  Approve & Execute
+                  <Wallet size={20} />
+                  Connect Wallet
                 </button>
-                <button
-                  onClick={handleReject}
-                  disabled={isLoading}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition disabled:opacity-50"
-                >
-                  ❌ Cancel
-                </button>
-              </div>
-              
-              {!isConnected && (
-                <p className="text-sm text-red-600 mt-2 flex items-center gap-1">
-                  <AlertCircle size={16} />
-                  Connect wallet to approve execution
-                </p>
+              ) : (
+                <div className="flex items-center gap-2">
+                  <div className="text-sm text-gray-300 bg-gray-800/50 px-3 py-2 rounded-lg border border-gray-700">
+                    {address?.slice(0, 6)}...{address?.slice(-4)}
+                  </div>
+                  <button
+                    onClick={() => disconnect()}
+                    className="px-3 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-lg text-sm transition-all"
+                  >
+                    ✕
+                  </button>
+                </div>
               )}
             </div>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Input */}
-      {!showPortfolio && (
-        <form onSubmit={handleSubmit} className="bg-white rounded-b-2xl p-6 shadow-lg">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about DeFi protocols, yields, or strategies..."
-              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-              disabled={isLoading || executionStatus === 'executing'}
-            />
-            <button
-              type="submit"
-              disabled={isLoading || !input.trim() || executionStatus === 'executing'}
-              className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <Send />
-            </button>
-          </div>
-        </form>
-      )}
+      {/* Main Content */}
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        {showPortfolio ? (
+          <Portfolio />
+        ) : (
+          <div className="bg-gray-900/50 backdrop-blur-xl rounded-2xl border border-gray-800 shadow-2xl">
+            {/* Chat Messages */}
+            <div className="h-[600px] overflow-y-auto p-6 space-y-4">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center">
+                  <div className="bg-gradient-to-br from-purple-500 to-pink-500 p-4 rounded-2xl mb-6">
+                    <Sparkles className="text-white" size={48} />
+                  </div>
+                  <h2 className="text-2xl font-bold text-white mb-2">Welcome to ChainInsight</h2>
+                  <p className="text-gray-400 mb-8 max-w-md">
+                    Your AI-powered DeFi research assistant. Ask me anything about protocols, yields, and strategies.
+                  </p>
+                  <div className="space-y-3 w-full max-w-md">
+                    {suggestedQueries.map((query, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setInput(query.text)}
+                        className="w-full px-4 py-3 bg-gray-800 hover:bg-gray-700 text-white rounded-xl transition-all flex items-center gap-3 group"
+                      >
+                        <span className="text-purple-400">{query.icon}</span>
+                        <span className="text-sm">{query.text}</span>
+                        <Send size={14} className="ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {messages.map((msg, idx) => (
+                    <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-5 py-4 ${
+                        msg.role === 'user'
+                          ? 'bg-gradient-to-r from-purple-600 to-pink-600 text-white'
+                          : msg.role === 'system'
+                          ? 'bg-blue-900/30 text-blue-200 border border-blue-700/50'
+                          : 'bg-gray-800 text-gray-100 border border-gray-700'
+                      }`}>
+                        {msg.role === 'agent' && (
+                          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-gray-700">
+                            <Sparkles size={16} className="text-purple-400" />
+                            <span className="text-xs font-semibold text-gray-400">ChainInsight AI</span>
+                          </div>
+                        )}
+                        <pre className="whitespace-pre-wrap font-sans text-sm leading-relaxed">{msg.content}</pre>
+                        {msg.content.includes('basescan.org') && (
+                          <a 
+                            href={msg.content.match(/https:\/\/[^\s]+/)?.[0]} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 mt-3 text-blue-400 hover:text-blue-300 underline text-sm"
+                          >
+                            <ExternalLink size={14} />
+                            View Transaction
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {isLoading && (
+                    <div className="flex justify-start">
+                      <div className="bg-gray-800 border border-gray-700 rounded-2xl px-5 py-4 flex items-center gap-3">
+                        <Loader2 className="animate-spin text-purple-400" size={20} />
+                        <span className="text-sm text-gray-300">Thinking...</span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={messagesEndRef} />
+                </>
+              )}
+            </div>
 
-      {/* Transaction Status */}
-      {isConfirming && !showPortfolio && (
-        <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <Loader2 className="animate-spin" size={20} />
-            <p className="text-blue-800">
-              ⏳ Confirming transaction {currentTxIndex + 1}/{pendingTransactions.length}...
-            </p>
+            {/* Approval Modal */}
+            {showApproval && (
+              <div className="mx-6 mb-4 bg-gradient-to-r from-amber-900/30 to-orange-900/30 border-2 border-amber-600/50 rounded-2xl p-6">
+                <div className="flex items-start gap-4">
+                  <AlertCircle className="text-amber-400 mt-1 flex-shrink-0" size={24} />
+                  <div className="flex-1">
+                    <h3 className="text-xl font-bold text-amber-200 mb-2">⚠️ Approval Required</h3>
+                    <p className="text-amber-100/80 mb-4">
+                      Ready to execute {pendingTransactions.length} transaction(s). Review and approve to continue.
+                    </p>
+                    
+                    <div className="bg-gray-900/50 rounded-xl p-4 mb-4 border border-gray-700">
+                      <p className="text-sm font-semibold text-gray-300 mb-3">Transaction Steps:</p>
+                      <ol className="space-y-2">
+                        {pendingTransactions.map((tx, idx) => (
+                          <li key={idx} className="flex items-start gap-3 text-sm text-gray-300">
+                            <span className="flex-shrink-0 w-6 h-6 bg-purple-600 rounded-full flex items-center justify-center text-xs font-bold">
+                              {idx + 1}
+                            </span>
+                            <span>{tx.description}</span>
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                    
+                    <div className="flex gap-3">
+                      <button
+                        onClick={handleApprove}
+                        disabled={!isConnected || isLoading}
+                        className="flex-1 bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-xl transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                      >
+                        <CheckCircle2 size={20} />
+                        Approve & Execute
+                      </button>
+                      <button
+                        onClick={handleReject}
+                        disabled={isLoading}
+                        className="flex-1 bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-xl transition-all"
+                      >
+                        ❌ Cancel
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Input */}
+            <form onSubmit={handleSubmit} className="p-6 border-t border-gray-800">
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                  placeholder="Ask about DeFi protocols, yields, or strategies..."
+                  className="flex-1 px-5 py-4 bg-gray-800 border border-gray-700 rounded-xl focus:outline-none focus:border-purple-500 text-white placeholder-gray-500 transition-all"
+                  disabled={isLoading || executionStatus === 'executing'}
+                />
+                <button
+                  type="submit"
+                  disabled={isLoading || !input.trim() || executionStatus === 'executing'}
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white p-4 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed transform hover:scale-105"
+                >
+                  <Send size={20} />
+                </button>
+              </div>
+            </form>
           </div>
-        </div>
-      )}
-      
-      {executionStatus === 'success' && !showPortfolio && (
-        <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="text-green-600" size={20} />
-            <p className="text-green-800 font-semibold">
-              🎉 All transactions completed successfully!
-            </p>
-          </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
