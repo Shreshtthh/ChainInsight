@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { useState, useEffect } from 'react';
 import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from 'wagmi';
 import { useConnect, useDisconnect } from 'wagmi';
@@ -5,6 +6,7 @@ import { formatUnits } from 'viem';
 import { Send, Loader2, Wallet, AlertCircle, CheckCircle2, ExternalLink } from 'lucide-react';
 import { api } from '../lib/api';
 import { CONTRACTS, MOCK_USDC_ABI, MOCK_VAULT_ABI } from '../lib/contracts';
+import Portfolio from './Portfolio';
 
 interface Message {
   role: 'user' | 'agent' | 'system';
@@ -28,6 +30,7 @@ export default function ChatInterface() {
   const [pendingTransactions, setPendingTransactions] = useState<TransactionParams[]>([]);
   const [currentTxIndex, setCurrentTxIndex] = useState(0);
   const [executionStatus, setExecutionStatus] = useState<'idle' | 'executing' | 'success' | 'error'>('idle');
+  const [showPortfolio, setShowPortfolio] = useState(false);
 
   const { address, isConnected } = useAccount();
   const { connect, connectors } = useConnect();
@@ -160,11 +163,11 @@ export default function ChatInterface() {
       console.log('🎁 Minting 1000 mUSDC to:', address);
       addMessage('system', '⏳ Minting 1000 mUSDC...');
       
-      await writeContract({
+      writeContract({
         address: CONTRACTS.MOCK_USDC,
         abi: MOCK_USDC_ABI,
         functionName: 'mint',
-        args: [BigInt(1000 * 10 ** 6)], // 1000 USDC (6 decimals)
+        args: [BigInt(1000 * 10 ** 6)],
       });
       
       console.log('✅ Mint transaction submitted');
@@ -176,54 +179,50 @@ export default function ChatInterface() {
   };
 
   const executeNextTransaction = async (txIndex: number) => {
-  if (txIndex >= pendingTransactions.length) {
-    console.log('✅ All transactions executed');
-    return;
-  }
-
-  const tx = pendingTransactions[txIndex];
-  console.log(`🔄 Executing transaction ${txIndex + 1}/${pendingTransactions.length}:`, tx);
-  
-  addMessage('system', `⏳ Step ${txIndex + 1}/${pendingTransactions.length}: ${tx.description}`);
-
-  try {
-    resetWrite();
-    
-    // Determine which contract and function from description
-    if (tx.description.includes('Approve')) {
-      // This is an approve transaction
-      const amount = tx.description.match(/(\d+)/)?.[0] || '100';
-      
-      writeContract({
-        address: CONTRACTS.MOCK_USDC,
-        abi: MOCK_USDC_ABI,
-        functionName: 'approve',
-        args: [CONTRACTS.MOCK_VAULT, BigInt(amount) * BigInt(10 ** 6)],
-      });
-      
-    } else if (tx.description.includes('Deposit')) {
-      // This is a deposit transaction
-      const amount = tx.description.match(/(\d+)/)?.[0] || '100';
-      const protocol = tx.description.match(/to (\w+)/)?.[1] || 'Morpho';
-      
-      writeContract({
-        address: CONTRACTS.MOCK_VAULT,
-        abi: MOCK_VAULT_ABI,
-        functionName: 'deposit',
-        args: [BigInt(amount) * BigInt(10 ** 6), protocol, 'Lending'],
-      });
+    if (txIndex >= pendingTransactions.length) {
+      console.log('✅ All transactions executed');
+      return;
     }
+
+    const tx = pendingTransactions[txIndex];
+    console.log(`🔄 Executing transaction ${txIndex + 1}/${pendingTransactions.length}:`, tx);
     
-    console.log(`✅ Transaction ${txIndex + 1} submitted, waiting for confirmation...`);
-    
-  } catch (error: any) {
-    console.error(`❌ Transaction ${txIndex + 1} failed:`, error);
-    setExecutionStatus('error');
-    addMessage('system', `❌ Transaction failed: ${error.message}`);
-  }
+    addMessage('system', `⏳ Step ${txIndex + 1}/${pendingTransactions.length}: ${tx.description}`);
+
+    try {
+      resetWrite();
+      
+      // Determine which contract and function from description
+      if (tx.description.includes('Approve')) {
+        const amount = tx.description.match(/(\d+)/)?.[0] || '100';
+        
+        writeContract({
+          address: CONTRACTS.MOCK_USDC,
+          abi: MOCK_USDC_ABI,
+          functionName: 'approve',
+          args: [CONTRACTS.MOCK_VAULT, BigInt(amount) * BigInt(10 ** 6)],
+        });
+        
+      } else if (tx.description.includes('Deposit')) {
+        const amount = tx.description.match(/(\d+)/)?.[0] || '100';
+        const protocol = tx.description.match(/to (\w+)/)?.[1] || 'Morpho';
+        
+        writeContract({
+          address: CONTRACTS.MOCK_VAULT,
+          abi: MOCK_VAULT_ABI,
+          functionName: 'deposit',
+          args: [BigInt(amount) * BigInt(10 ** 6), protocol, 'Lending'],
+        });
+      }
+      
+      console.log(`✅ Transaction ${txIndex + 1} submitted, waiting for confirmation...`);
+      
+    } catch (error: any) {
+      console.error(`❌ Transaction ${txIndex + 1} failed:`, error);
+      setExecutionStatus('error');
+      addMessage('system', `❌ Transaction failed: ${error.message}`);
+    }
   };
-
-
 
   const handleApprove = async () => {
     if (!sessionId) {
@@ -250,7 +249,6 @@ export default function ChatInterface() {
       
       console.log('📥 Approval response:', response);
 
-      // Get transactions from response (backend might return them again)
       const transactions = response.transactions || pendingTransactions;
       
       if (!transactions || transactions.length === 0) {
@@ -265,7 +263,6 @@ export default function ChatInterface() {
       setCurrentTxIndex(0);
       setExecutionStatus('executing');
       
-      // Start executing transactions
       executeNextTransaction(0);
       
     } catch (error: any) {
@@ -296,6 +293,16 @@ export default function ChatInterface() {
           </div>
           
           <div className="flex items-center gap-4">
+            {/* Portfolio Toggle Button */}
+            {isConnected && (
+              <button
+                onClick={() => setShowPortfolio(!showPortfolio)}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition"
+              >
+                {showPortfolio ? '💬 Chat' : '📊 Portfolio'}
+              </button>
+            )}
+
             {/* Balance Display */}
             {isConnected && balance !== undefined ? (
               <div className="text-right">
@@ -349,66 +356,72 @@ export default function ChatInterface() {
         </div>
       </div>
 
-      {/* Chat Messages */}
+      {/* Chat/Portfolio Section */}
       <div className="bg-white p-6 min-h-[500px] max-h-[600px] overflow-y-auto">
-        {messages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-20">
-            <p className="text-lg mb-4">👋 Welcome! Ask me anything about DeFi protocols and yields.</p>
-            <div className="space-y-2">
-              <button 
-                onClick={() => setInput("What are the top DeFi protocols on Base?")}
-                className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
-              >
-                What are the top DeFi protocols on Base?
-              </button>
-              <button 
-                onClick={() => setInput("Deposit 100 USDC to a safe protocol")}
-                className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
-              >
-                Deposit 100 USDC to a safe protocol
-              </button>
-            </div>
-          </div>
+        {showPortfolio ? (
+          <Portfolio />
         ) : (
-          <div className="space-y-4">
-            {messages.map((msg, idx) => (
-              <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                  msg.role === 'user' 
-                    ? 'bg-purple-600 text-white' 
-                    : msg.role === 'system'
-                    ? 'bg-blue-50 text-blue-800 border border-blue-200'
-                    : 'bg-gray-100 text-gray-800'
-                }`}>
-                  <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
-                  {msg.content.includes('basescan.org') && (
-                    <a 
-                      href={msg.content.match(/https:\/\/[^\s]+/)?.[0]} 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-800 underline"
-                    >
-                      <ExternalLink size={14} />
-                      View Transaction
-                    </a>
-                  )}
+          <>
+            {messages.length === 0 ? (
+              <div className="text-center text-gray-500 mt-20">
+                <p className="text-lg mb-4">👋 Welcome! Ask me anything about DeFi protocols and yields.</p>
+                <div className="space-y-2">
+                  <button 
+                    onClick={() => setInput("What are the top DeFi protocols on Base?")}
+                    className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
+                  >
+                    What are the top DeFi protocols on Base?
+                  </button>
+                  <button 
+                    onClick={() => setInput("Deposit 100 USDC to Morpho")}
+                    className="block mx-auto px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition"
+                  >
+                    Deposit 100 USDC to Morpho
+                  </button>
                 </div>
               </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
-                  <Loader2 className="animate-spin" size={20} />
-                  <span className="text-sm text-gray-600">Thinking...</span>
-                </div>
+            ) : (
+              <div className="space-y-4">
+                {messages.map((msg, idx) => (
+                  <div key={idx} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                    <div className={`max-w-[80%] rounded-2xl px-4 py-3 ${
+                      msg.role === 'user' 
+                        ? 'bg-purple-600 text-white' 
+                        : msg.role === 'system'
+                        ? 'bg-blue-50 text-blue-800 border border-blue-200'
+                        : 'bg-gray-100 text-gray-800'
+                    }`}>
+                      <pre className="whitespace-pre-wrap font-sans text-sm">{msg.content}</pre>
+                      {msg.content.includes('basescan.org') && (
+                        <a 
+                          href={msg.content.match(/https:\/\/[^\s]+/)?.[0]} 
+                          target="_blank" 
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 mt-2 text-blue-600 hover:text-blue-800 underline"
+                        >
+                          <ExternalLink size={14} />
+                          View Transaction
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex justify-start">
+                    <div className="bg-gray-100 rounded-2xl px-4 py-3 flex items-center gap-2">
+                      <Loader2 className="animate-spin" size={20} />
+                      <span className="text-sm text-gray-600">Thinking...</span>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
-          </div>
+          </>
         )}
       </div>
 
       {/* Approval Modal */}
-      {showApproval && (
+      {showApproval && !showPortfolio && (
         <div className="bg-yellow-50 border-2 border-yellow-400 rounded-xl p-6 mb-4">
           <div className="flex items-start gap-3">
             <AlertCircle className="text-yellow-600 mt-1" size={24} />
@@ -463,28 +476,30 @@ export default function ChatInterface() {
       )}
 
       {/* Input */}
-      <form onSubmit={handleSubmit} className="bg-white rounded-b-2xl p-6 shadow-lg">
-        <div className="flex gap-3">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask about DeFi protocols, yields, or strategies..."
-            className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
-            disabled={isLoading || executionStatus === 'executing'}
-          />
-          <button
-            type="submit"
-            disabled={isLoading || !input.trim() || executionStatus === 'executing'}
-            className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            <Send />
-          </button>
-        </div>
-      </form>
+      {!showPortfolio && (
+        <form onSubmit={handleSubmit} className="bg-white rounded-b-2xl p-6 shadow-lg">
+          <div className="flex gap-3">
+            <input
+              type="text"
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              placeholder="Ask about DeFi protocols, yields, or strategies..."
+              className="flex-1 px-4 py-3 border-2 border-gray-300 rounded-lg focus:outline-none focus:border-purple-500"
+              disabled={isLoading || executionStatus === 'executing'}
+            />
+            <button
+              type="submit"
+              disabled={isLoading || !input.trim() || executionStatus === 'executing'}
+              className="bg-purple-600 hover:bg-purple-700 text-white p-3 rounded-lg transition disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <Send />
+            </button>
+          </div>
+        </form>
+      )}
 
       {/* Transaction Status */}
-      {isConfirming && (
+      {isConfirming && !showPortfolio && (
         <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-center gap-2">
             <Loader2 className="animate-spin" size={20} />
@@ -495,7 +510,7 @@ export default function ChatInterface() {
         </div>
       )}
       
-      {executionStatus === 'success' && (
+      {executionStatus === 'success' && !showPortfolio && (
         <div className="mt-4 bg-green-50 border border-green-200 rounded-lg p-4">
           <div className="flex items-center gap-2">
             <CheckCircle2 className="text-green-600" size={20} />
