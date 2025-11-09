@@ -1,4 +1,4 @@
-# 🚀 ChainInsight — AI-Powered DeFi Research & Execution Agent
+# 🚀 ChainInsight- AI-Powered DeFi Research & Execution Agent
 
 <div align="center">
 
